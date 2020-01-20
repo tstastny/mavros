@@ -83,6 +83,7 @@ public:
 		setup_covariance(unk_orientation_cov, 0.0);
 
 		imu_pub = imu_nh.advertise<sensor_msgs::Imu>("data", 10);
+        imu_ned_pub = imu_nh.advertise<sensor_msgs::Imu>("data_ned", 10);
 		magn_pub = imu_nh.advertise<sensor_msgs::MagneticField>("mag", 10);
 		temp_imu_pub = imu_nh.advertise<sensor_msgs::Temperature>("temperature_imu", 10);
 		temp_baro_pub = imu_nh.advertise<sensor_msgs::Temperature>("temperature_baro", 10);
@@ -110,6 +111,7 @@ private:
 	std::string frame_id;
 
 	ros::Publisher imu_pub;
+    ros::Publisher imu_ned_pub;
 	ros::Publisher imu_raw_pub;
 	ros::Publisher magn_pub;
 	ros::Publisher temp_imu_pub;
@@ -212,12 +214,19 @@ private:
 		m_uas->update_attitude_imu_ned(imu_ned_msg);
 		// [store_ned]
 
-		/** Publish only base_link ENU message
+		/** Publish base_link ENU message
 		 *  @snippet src/plugins/imu.cpp pub_enu
 		 */
 		// [pub_enu]
 		imu_pub.publish(imu_enu_msg);
 		// [pub_enu]
+
+        /** Publish base_link NED message
+		 *  @snippet src/plugins/imu.cpp pub_enu
+		 */
+		// [pub_ned]
+		imu_ned_pub.publish(imu_ned_msg);
+		// [pub_ned]
 	}
 
 	/**
