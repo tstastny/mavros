@@ -27,6 +27,9 @@
 #include <geometry_msgs/TwistStamped.h>
 #include <mavros_msgs/Thrust.h>
 
+#include <tf/LinearMath/Quaternion.h>
+#include <tf/LinearMath/Matrix3x3.h>
+
 namespace mavros {
 namespace std_plugins {
 
@@ -68,6 +71,9 @@ public:
 		// thrust msg subscriber to sync
 		th_sub.subscribe(sp_nh, "thrust", 1);
 
+        // publishers
+        att_target_pub = sp_nh.advertise<geometry_msgs::TwistStamped>("attitude_received", 10);
+
 		if (tf_listen) {
 			ROS_INFO_STREAM_NAMED("attitude",
 						"Listen to desired attitude transform "
@@ -97,13 +103,17 @@ public:
 
 	Subscriptions get_subscriptions()
 	{
-		return { /* Rx disabled */ };
+		return {
+            make_handler(&SetpointAttitudePlugin::handle_attitude_target_received),
+        };
 	}
 
 private:
 	friend class SetAttitudeTargetMixin;
 	friend class TF2ListenerMixin;
 	ros::NodeHandle sp_nh;
+
+    ros::Publisher att_target_pub;
 
 	message_filters::Subscriber<mavros_msgs::Thrust> th_sub;
 	message_filters::Subscriber<geometry_msgs::PoseStamped> pose_sub;
@@ -213,6 +223,35 @@ private:
 
 		if (is_normalized(thrust_msg->thrust))
 			send_attitude_ang_velocity(req->header.stamp, ang_vel, thrust_msg->thrust);
+	}
+
+    /* -*- message handlers -*- */
+
+	/**
+	 * @brief Handle ATTITUDE_TARGET MAVlink message.
+	 * Message specification: https://mavlink.io/en/messages/common.html#ATTITUDE_TARGET
+	 * @param msg	Received Mavlink msg
+	 * @param att	ATTITUDE_TARGET msg
+	 */
+	void handle_attitude_target_received(const mavlink::mavlink_message_t *msg, mavlink::common::msg::ATTITUDE_TARGET &att)
+	{
+		tf::Quaternion q_ned(att.q[1], att.q[2], att.q[3], att.q[0]);
+
+        // convert to RPY for easier tuning
+        double roll, pitch, yaw;
+        tf::Matrix3x3(q_ned).getRPY(roll, pitch, yaw);
+
+        // populate/publish attitude target msg
+        geometry_msgs::TwistStamped ros_msg;
+        ros_msg.twist.linear.x = roll;
+        ros_msg.twist.linear.y = pitch;
+        ros_msg.twist.linear.z = yaw;
+        ros_msg.twist.angular.x = att.body_roll_rate;
+        ros_msg.twist.angular.y = att.body_pitch_rate;
+        ros_msg.twist.angular.z = att.body_yaw_rate;
+        ros_msg.header.stamp = ros::Time::now();
+        ros_msg.header.frame_id = "aircraft";
+        att_target_pub.publish(ros_msg);
 	}
 
 };
